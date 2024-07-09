@@ -48,6 +48,61 @@ app.get("/api/users", (req, res) => {
   })
 })
 
+//handle a get request for logs for a particular user (userid is a parameter in the request)
+app.get("/api/users/:_id/logs", (req, res) => {
+  let userid = req.params._id;
+  
+  //construct a query
+  let query = {
+    userid: userid,
+  }
+  //grab the optional parameters from the query
+  let limit = req.query.limit;
+  let from = req.query.from;
+  let to = req.query.to;
+
+  //if the limit parameter exists, we have to parse it as a number
+  if (limit){
+    limit = parseInt(limit);
+  }
+
+  //if either to or from exist, we need to use them to filter the query, which we do by adding them to our query object
+  if (from){
+    query.date = {};
+    query.date['$gte'] = from;
+  }
+  if (to){
+    if (!query.date){
+      query.date = {};
+    }
+    query.date['$lte'] = to;
+  }
+  
+  //query the database
+  Exercise.find(query, 'description duration date -_id').limit(limit).exec(function(err, exercises){
+    if (err) return console.error(err);
+
+    //need to change the date in the exercises to a string before returning it
+    exercises = exercises.map((x) => {
+      return {
+        description: x.description,
+        duration: x.duration,
+        date: x.date.toDateString()
+      }
+    })
+
+    //need to query again to get the user's name
+    User.findById(userid, 'username', function(err, user){
+      res.json({
+        username: user.username,
+        count: exercises.length,
+        _id: userid,
+        log: exercises
+      })
+    })
+  })
+})
+
 //post a new exercise to the database
 app.post("/api/users/:_id/exercises", (req, res) => {
   //first get all the info
@@ -85,9 +140,7 @@ app.post("/api/users/:_id/exercises", (req, res) => {
         _id: user._id
       })
     });
-
-  });
-  
+  });  
 })
 
 const listener = app.listen(process.env.PORT || 3000, () => {
